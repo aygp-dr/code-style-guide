@@ -1,0 +1,30 @@
+#+TITLE: code-style-guide
+#+STARTUP: overview
+
+* Overview
+
+A babashka CLI tool that enforces coding style rules across polyglot codebases.
+
+* Quick Start
+
+#+begin_src bash
+bb run --dir ./my-project
+bb run --dir ./my-project --format json
+#+end_src
+
+* Requirements
+
+- [[https://github.com/babashka/babashka][Babashka]] v1.12+
+
+* Development
+
+| Target | Description |
+|--------+-------------|
+| make run | Run the tool |
+| make test | Run tests |
+| make lint | Check for issues |
+| make clean | Clean caches |
+
+* Status
+
+Scaffold — see CLAUDE.md for implementation plan.

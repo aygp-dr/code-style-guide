@@ -1,30 +1,38 @@
 #+TITLE: code-style-guide
-#+STARTUP: overview
-
-* Overview
+#+AUTHOR: aygp-dr
 
 A babashka CLI tool that enforces coding style rules across polyglot codebases.
 
-* Quick Start
+** Quick Start
 
 #+begin_src bash
-bb run --dir ./my-project
-bb run --dir ./my-project --format json
+bb check -- --dir ./my-project
+bb check -- --dir ./my-project --format json --severity medium
 #+end_src
 
-* Requirements
+** Requirements
 
 - [[https://github.com/babashka/babashka][Babashka]] v1.12+
 
-* Development
+** Rules
 
-| Target | Description |
-|--------+-------------|
-| make run | Run the tool |
-| make test | Run tests |
-| make lint | Check for issues |
-| make clean | Clean caches |
+| Rule | Severity | Fixable | Description |
+|------|----------|---------|-------------|
+| line-length | low | no | Lines over 120 chars |
+| trailing-whitespace | low | yes | Trailing spaces/tabs |
+| tabs-not-spaces | medium | yes | Tab indentation |
+| consecutive-blank-lines | low | no | Multiple blank lines |
+| todo-without-ticket | medium | no | TODOs lacking ticket refs |
+| fixme-present | high | no | FIXME comments |
+| debug-print | high | no | print/console.log/fmt.Print |
+| magic-number | medium | no | Unnamed numeric constants |
 
-* Status
+** Supported Languages
 
-Scaffold — see CLAUDE.md for implementation plan.
+Python, JavaScript/TypeScript, Go, Java, Ruby, Clojure, Rust, Shell
+
+** Exit Codes
+
+- =0= — clean
+- =1= — violations found
+- =2= — error

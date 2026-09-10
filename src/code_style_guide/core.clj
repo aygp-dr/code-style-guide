@@ -63,10 +63,11 @@
    "go" "go" "java" "java" "rb" "ruby" "clj" "clojure"
    "rs" "rust" "sh" "shell" "bash" "shell"})
 
-(defn check-file [path]
+(defn check-content
+  "Style violations in `content`, the text of the file at `path` (pure)."
+  [content path]
   (let [ext (last (str/split (str (fs/file-name path)) #"\."))
         lang (get ext->lang ext "unknown")
-        content (slurp (str path))
         lines (str/split-lines content)]
     (->> lines
          (map-indexed vector)
@@ -90,6 +91,9 @@
                :prev-blank (str/blank? line)}))
           {:violations [] :prev-blank false})
          :violations)))
+
+(defn check-file [path]
+  (check-content (slurp (str path)) path))
 
 (defn scan-directory [dir]
   (let [extensions (set (keys ext->lang))

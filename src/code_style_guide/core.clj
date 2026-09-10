@@ -1,8 +1,10 @@
 (ns code-style-guide.core
   (:require [babashka.cli :as cli]
             [babashka.fs :as fs]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
-            [cheshire.core :as json]))
+            [cheshire.core :as json]
+            [code-style-guide.specs :as specs]))
 
 (def style-rules
   [{:id "line-length"
@@ -26,7 +28,7 @@
     :severity "low"
     :fix nil}
    {:id "no-newline-at-end"
-    :check (fn [line ctx] (and (:last-line ctx) (not (str/blank? line)) (not (str/ends-with? line "\n"))))
+    :check (fn [line ctx] (and (:last-line ctx) (not (str/blank? line)) (not (:final-newline ctx))))
     :message "File does not end with newline"
     :severity "low"
     :fix nil}
@@ -63,33 +65,56 @@
    "go" "go" "java" "java" "rb" "ruby" "clj" "clojure"
    "rs" "rust" "sh" "shell" "bash" "shell"})
 
-(defn check-file [path]
+(defn check-content
+  "Style violations in `content`, the text of the file at `path` (pure)."
+  [content path]
   (let [ext (last (str/split (str (fs/file-name path)) #"\."))
         lang (get ext->lang ext "unknown")
-        content (slurp (str path))
         lines (str/split-lines content)]
     (->> lines
          (map-indexed vector)
          (reduce
-           (fn [{:keys [violations prev-blank]} [idx line]]
-             (let [ctx {:lang lang
-                        :prev-blank prev-blank
-                        :last-line (= idx (dec (count lines)))}
-                   new-violations
-                   (->> style-rules
-                        (filter #(try ((:check %) line ctx) (catch Exception _ false)))
-                        (map (fn [rule]
-                               {:file (str path)
-                                :line (inc idx)
-                                :id (:id rule)
-                                :severity (:severity rule)
-                                :message (:message rule)
-                                :fixable (some? (:fix rule))
-                                :match (str/trim (subs line 0 (min (count line) 80)))})))]
-               {:violations (into violations new-violations)
-                :prev-blank (str/blank? line)}))
-           {:violations [] :prev-blank false})
+          (fn [{:keys [violations prev-blank]} [idx line]]
+            (let [ctx {:lang lang
+                       :prev-blank prev-blank
+                       :last-line (= idx (dec (count lines)))
+                       ;; split-lines drops line terminators, so look at the content
+                       :final-newline (str/ends-with? content "\n")}
+                  new-violations
+                  (->> style-rules
+                       (filter #(try ((:check %) line ctx) (catch Exception _ false)))
+                       (map (fn [rule]
+                              {:file (str path)
+                               :line (inc idx)
+                               :id (:id rule)
+                               :severity (:severity rule)
+                               :message (:message rule)
+                               :fixable (some? (:fix rule))
+                               :match (str/trim (subs line 0 (min (count line) 80)))})))]
+              {:violations (into violations new-violations)
+               :prev-blank (str/blank? line)}))
+          {:violations [] :prev-blank false})
          :violations)))
+
+(s/fdef check-content
+  :args (s/cat :content ::specs/content :path ::specs/path-like)
+  :ret ::specs/violations
+  :fn (fn [{{:keys [content] [_ path] :path} :args ret :ret}]
+        (let [lines (str/split-lines content)]
+          (and (every? #(<= 1 (:line %) (count lines)) ret)
+               (every? #(= (str path) (:file %)) ret)
+               ;; the final-newline rule fires exactly when the last line
+               ;; has text and no newline follows it
+               (= (boolean (some #(= "no-newline-at-end" (:id %)) ret))
+                  (and (not (str/blank? (last lines)))
+                       (not (str/ends-with? content "\n"))))))))
+
+(defn check-file [path]
+  (check-content (slurp (str path)) path))
+
+(s/fdef check-file
+  :args (s/cat :path ::specs/path-like)
+  :ret ::specs/violations)
 
 (defn scan-directory [dir]
   (let [extensions (set (keys ext->lang))
@@ -103,33 +128,53 @@
          (mapcat check-file)
          (sort-by (juxt :severity :file :line)))))
 
+(s/fdef scan-directory
+  :args (s/cat :dir ::specs/path-like)
+  :ret ::specs/violations)
+
 (defn format-text [violations]
   (if (empty? violations)
     "No style violations found."
     (str/join "\n"
-      (concat
-        [(format "Found %d style violation(s):\n" (count violations))]
-        (map (fn [{:keys [file line severity message fixable match]}]
-               (format "  %s:%d [%s]%s %s\n    |  %s"
-                       file line (str/upper-case severity)
-                       (if fixable " (fixable)" "") message match))
-             violations)
-        [""
-         (format "Summary: %d high, %d medium, %d low (%d auto-fixable)"
-                 (count (filter #(= (:severity %) "high") violations))
-                 (count (filter #(= (:severity %) "medium") violations))
-                 (count (filter #(= (:severity %) "low") violations))
-                 (count (filter :fixable violations)))]))))
+              (concat
+               [(format "Found %d style violation(s):\n" (count violations))]
+               (map (fn [{:keys [file line severity message fixable match]}]
+                      (format "  %s:%d [%s]%s %s\n    |  %s"
+                              file line (str/upper-case severity)
+                              (if fixable " (fixable)" "") message match))
+                    violations)
+               [""
+                (format "Summary: %d high, %d medium, %d low (%d auto-fixable)"
+                        (count (filter #(= (:severity %) "high") violations))
+                        (count (filter #(= (:severity %) "medium") violations))
+                        (count (filter #(= (:severity %) "low") violations))
+                        (count (filter :fixable violations)))]))))
+
+(s/fdef format-text
+  :args (s/cat :violations ::specs/violations)
+  :ret string?
+  :fn (fn [{{:keys [violations]} :args ret :ret}]
+        (if (empty? violations)
+          (= "No style violations found." ret)
+          (str/includes? ret (format "Found %d style violation(s)" (count violations))))))
 
 (defn format-json [violations]
   (json/generate-string
-    {:total (count violations)
-     :by-severity {:high (count (filter #(= (:severity %) "high") violations))
-                   :medium (count (filter #(= (:severity %) "medium") violations))
-                   :low (count (filter #(= (:severity %) "low") violations))}
-     :fixable (count (filter :fixable violations))
-     :violations violations}
-    {:pretty true}))
+   {:total (count violations)
+    :by-severity {:high (count (filter #(= (:severity %) "high") violations))
+                  :medium (count (filter #(= (:severity %) "medium") violations))
+                  :low (count (filter #(= (:severity %) "low") violations))}
+    :fixable (count (filter :fixable violations))
+    :violations violations}
+   {:pretty true}))
+
+(s/fdef format-json
+  :args (s/cat :violations ::specs/violations)
+  :ret string?
+  :fn (fn [{{:keys [violations]} :args ret :ret}]
+        (let [m (json/parse-string ret true)]
+          (and (= (count violations) (:total m))
+               (= (count (filter :fixable violations)) (:fixable m))))))
 
 (def cli-spec
   {:dir {:desc "Directory to scan" :default "." :alias :d}
@@ -150,11 +195,14 @@
         violations (->> (scan-directory (:dir opts))
                         (filter #(>= (get severity-rank (:severity %) 0) min-severity)))]
     (println
-      (case (:format opts)
-        "json" (format-json violations)
-        "edn" (pr-str violations)
-        (format-text violations)))
+     (case (:format opts)
+       "json" (format-json violations)
+       "edn" (pr-str violations)
+       (format-text violations)))
     (System/exit (if (seq violations) 1 0))))
+
+(s/fdef -main
+  :args (s/* string?))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (apply -main *command-line-args*))

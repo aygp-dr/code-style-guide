@@ -6,8 +6,8 @@ A babashka CLI tool that enforces coding style rules across polyglot codebases.
 ** Quick Start
 
 #+begin_src bash
-bb check -- --dir ./my-project
-bb check -- --dir ./my-project --format json --severity medium
+bb style:check -- --dir ./my-project
+bb style:check -- --dir ./my-project --format json --severity medium
 #+end_src
 
 ** Requirements

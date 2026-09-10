@@ -13,16 +13,8 @@
 (def ^:private side-effecting
   #{`sut/check-file `sut/scan-directory `sut/-main})
 
-;; TODO(spec): (check-content "x = 1\n" "0") reports no-newline-at-end for a
-;; file that does end with a newline. The rule tests the last line for "\n",
-;; but str/split-lines has already removed it, so every file whose last line
-;; has text is flagged.
-(def ^:private known-failing
-  #{`sut/check-content})
-
 (defn- checkable []
-  (remove (into side-effecting known-failing)
-          (stest/enumerate-namespace 'code-style-guide.core)))
+  (remove side-effecting (stest/enumerate-namespace 'code-style-guide.core)))
 
 (deftest fdefs-hold-under-generative-testing
   (let [results (stest/check (checkable) check-opts)]

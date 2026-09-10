@@ -81,6 +81,10 @@
 (deftest check-content-missing-final-newline
   (is (= ["no-newline-at-end"] (map :id (sut/check-content "x = 1\ny = 2" "ok.py")))))
 
+(deftest check-content-final-newline-present
+  (is (empty? (sut/check-content "x = 1\ny = 2\n" "ok.py")))
+  (is (empty? (sut/check-content "x = 1\r\n" "ok.py"))))
+
 (deftest check-file-and-scan-directory
   (let [dir (fs/create-temp-dir)
         a-py (str (fs/path dir "a.py"))]

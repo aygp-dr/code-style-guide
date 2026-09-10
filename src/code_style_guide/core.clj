@@ -28,7 +28,7 @@
     :severity "low"
     :fix nil}
    {:id "no-newline-at-end"
-    :check (fn [line ctx] (and (:last-line ctx) (not (str/blank? line)) (not (str/ends-with? line "\n"))))
+    :check (fn [line ctx] (and (:last-line ctx) (not (str/blank? line)) (not (:final-newline ctx))))
     :message "File does not end with newline"
     :severity "low"
     :fix nil}
@@ -77,7 +77,9 @@
           (fn [{:keys [violations prev-blank]} [idx line]]
             (let [ctx {:lang lang
                        :prev-blank prev-blank
-                       :last-line (= idx (dec (count lines)))}
+                       :last-line (= idx (dec (count lines)))
+                       ;; split-lines drops line terminators, so look at the content
+                       :final-newline (str/ends-with? content "\n")}
                   new-violations
                   (->> style-rules
                        (filter #(try ((:check %) line ctx) (catch Exception _ false)))

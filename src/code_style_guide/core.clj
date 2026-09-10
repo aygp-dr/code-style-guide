@@ -71,24 +71,24 @@
     (->> lines
          (map-indexed vector)
          (reduce
-           (fn [{:keys [violations prev-blank]} [idx line]]
-             (let [ctx {:lang lang
-                        :prev-blank prev-blank
-                        :last-line (= idx (dec (count lines)))}
-                   new-violations
-                   (->> style-rules
-                        (filter #(try ((:check %) line ctx) (catch Exception _ false)))
-                        (map (fn [rule]
-                               {:file (str path)
-                                :line (inc idx)
-                                :id (:id rule)
-                                :severity (:severity rule)
-                                :message (:message rule)
-                                :fixable (some? (:fix rule))
-                                :match (str/trim (subs line 0 (min (count line) 80)))})))]
-               {:violations (into violations new-violations)
-                :prev-blank (str/blank? line)}))
-           {:violations [] :prev-blank false})
+          (fn [{:keys [violations prev-blank]} [idx line]]
+            (let [ctx {:lang lang
+                       :prev-blank prev-blank
+                       :last-line (= idx (dec (count lines)))}
+                  new-violations
+                  (->> style-rules
+                       (filter #(try ((:check %) line ctx) (catch Exception _ false)))
+                       (map (fn [rule]
+                              {:file (str path)
+                               :line (inc idx)
+                               :id (:id rule)
+                               :severity (:severity rule)
+                               :message (:message rule)
+                               :fixable (some? (:fix rule))
+                               :match (str/trim (subs line 0 (min (count line) 80)))})))]
+              {:violations (into violations new-violations)
+               :prev-blank (str/blank? line)}))
+          {:violations [] :prev-blank false})
          :violations)))
 
 (defn scan-directory [dir]
@@ -107,29 +107,29 @@
   (if (empty? violations)
     "No style violations found."
     (str/join "\n"
-      (concat
-        [(format "Found %d style violation(s):\n" (count violations))]
-        (map (fn [{:keys [file line severity message fixable match]}]
-               (format "  %s:%d [%s]%s %s\n    |  %s"
-                       file line (str/upper-case severity)
-                       (if fixable " (fixable)" "") message match))
-             violations)
-        [""
-         (format "Summary: %d high, %d medium, %d low (%d auto-fixable)"
-                 (count (filter #(= (:severity %) "high") violations))
-                 (count (filter #(= (:severity %) "medium") violations))
-                 (count (filter #(= (:severity %) "low") violations))
-                 (count (filter :fixable violations)))]))))
+              (concat
+               [(format "Found %d style violation(s):\n" (count violations))]
+               (map (fn [{:keys [file line severity message fixable match]}]
+                      (format "  %s:%d [%s]%s %s\n    |  %s"
+                              file line (str/upper-case severity)
+                              (if fixable " (fixable)" "") message match))
+                    violations)
+               [""
+                (format "Summary: %d high, %d medium, %d low (%d auto-fixable)"
+                        (count (filter #(= (:severity %) "high") violations))
+                        (count (filter #(= (:severity %) "medium") violations))
+                        (count (filter #(= (:severity %) "low") violations))
+                        (count (filter :fixable violations)))]))))
 
 (defn format-json [violations]
   (json/generate-string
-    {:total (count violations)
-     :by-severity {:high (count (filter #(= (:severity %) "high") violations))
-                   :medium (count (filter #(= (:severity %) "medium") violations))
-                   :low (count (filter #(= (:severity %) "low") violations))}
-     :fixable (count (filter :fixable violations))
-     :violations violations}
-    {:pretty true}))
+   {:total (count violations)
+    :by-severity {:high (count (filter #(= (:severity %) "high") violations))
+                  :medium (count (filter #(= (:severity %) "medium") violations))
+                  :low (count (filter #(= (:severity %) "low") violations))}
+    :fixable (count (filter :fixable violations))
+    :violations violations}
+   {:pretty true}))
 
 (def cli-spec
   {:dir {:desc "Directory to scan" :default "." :alias :d}
@@ -150,10 +150,10 @@
         violations (->> (scan-directory (:dir opts))
                         (filter #(>= (get severity-rank (:severity %) 0) min-severity)))]
     (println
-      (case (:format opts)
-        "json" (format-json violations)
-        "edn" (pr-str violations)
-        (format-text violations)))
+     (case (:format opts)
+       "json" (format-json violations)
+       "edn" (pr-str violations)
+       (format-text violations)))
     (System/exit (if (seq violations) 1 0))))
 
 (when (= *file* (System/getProperty "babashka.file"))

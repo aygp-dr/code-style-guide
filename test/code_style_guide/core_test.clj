@@ -1,9 +1,14 @@
 (ns code-style-guide.core-test
   (:require [babashka.fs :as fs]
             [cheshire.core :as json]
+            [clojure.spec.test.alpha :as stest]
             [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
+            [clojure.test :refer [deftest is testing use-fixtures]]
             [code-style-guide.core :as sut]))
+
+;; Exercise every s/fdef :args spec while the unit tests run.
+(use-fixtures :once
+  (fn [f] (stest/instrument) (try (f) (finally (stest/unstrument)))))
 
 (defn- rule [id]
   (first (filter #(= id (:id %)) sut/style-rules)))

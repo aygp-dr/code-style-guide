@@ -1,8 +1,10 @@
 (ns code-style-guide.core
   (:require [babashka.cli :as cli]
             [babashka.fs :as fs]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
-            [cheshire.core :as json]))
+            [cheshire.core :as json]
+            [code-style-guide.specs :as specs]))
 
 (def style-rules
   [{:id "line-length"
@@ -92,8 +94,25 @@
           {:violations [] :prev-blank false})
          :violations)))
 
+(s/fdef check-content
+  :args (s/cat :content ::specs/content :path ::specs/path-like)
+  :ret ::specs/violations
+  :fn (fn [{{:keys [content] [_ path] :path} :args ret :ret}]
+        (let [lines (str/split-lines content)]
+          (and (every? #(<= 1 (:line %) (count lines)) ret)
+               (every? #(= (str path) (:file %)) ret)
+               ;; the final-newline rule fires exactly when the last line
+               ;; has text and no newline follows it
+               (= (boolean (some #(= "no-newline-at-end" (:id %)) ret))
+                  (and (not (str/blank? (last lines)))
+                       (not (str/ends-with? content "\n"))))))))
+
 (defn check-file [path]
   (check-content (slurp (str path)) path))
+
+(s/fdef check-file
+  :args (s/cat :path ::specs/path-like)
+  :ret ::specs/violations)
 
 (defn scan-directory [dir]
   (let [extensions (set (keys ext->lang))
@@ -106,6 +125,10 @@
     (->> files
          (mapcat check-file)
          (sort-by (juxt :severity :file :line)))))
+
+(s/fdef scan-directory
+  :args (s/cat :dir ::specs/path-like)
+  :ret ::specs/violations)
 
 (defn format-text [violations]
   (if (empty? violations)
@@ -125,6 +148,14 @@
                         (count (filter #(= (:severity %) "low") violations))
                         (count (filter :fixable violations)))]))))
 
+(s/fdef format-text
+  :args (s/cat :violations ::specs/violations)
+  :ret string?
+  :fn (fn [{{:keys [violations]} :args ret :ret}]
+        (if (empty? violations)
+          (= "No style violations found." ret)
+          (str/includes? ret (format "Found %d style violation(s)" (count violations))))))
+
 (defn format-json [violations]
   (json/generate-string
    {:total (count violations)
@@ -134,6 +165,14 @@
     :fixable (count (filter :fixable violations))
     :violations violations}
    {:pretty true}))
+
+(s/fdef format-json
+  :args (s/cat :violations ::specs/violations)
+  :ret string?
+  :fn (fn [{{:keys [violations]} :args ret :ret}]
+        (let [m (json/parse-string ret true)]
+          (and (= (count violations) (:total m))
+               (= (count (filter :fixable violations)) (:fixable m))))))
 
 (def cli-spec
   {:dir {:desc "Directory to scan" :default "." :alias :d}
@@ -159,6 +198,9 @@
        "edn" (pr-str violations)
        (format-text violations)))
     (System/exit (if (seq violations) 1 0))))
+
+(s/fdef -main
+  :args (s/* string?))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (apply -main *command-line-args*))

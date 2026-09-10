@@ -19,13 +19,14 @@
   ;; The tool's own verbs. code-style-guide checks and fixes other people's
   ;; code, so its tasks carry a style: prefix; plain check is the standard
   ;; lint + fmt + test task below.
+  ;; -main takes string args; drop the "--" of `bb style:check -- --dir x`
   style:check {:doc "Check files for style violations"
-               :task (exec 'code-style-guide.core/-main)
-               :exec-args {:format "text"}}
+               :task (apply (requiring-resolve 'code-style-guide.core/-main)
+                            (remove #{"--"} *command-line-args*))}
 
   style:fix   {:doc "Auto-fix style violations where possible"
-               :task (exec 'code-style-guide.core/-main)
-               :exec-args {:fix true :format "text"}}
+               :task (apply (requiring-resolve 'code-style-guide.core/-main)
+                            "--fix" (remove #{"--"} *command-line-args*))}
 
   test    {:doc "Run the test suite on the JVM (clojure -M:test)"
            :task (apply shell "clojure -M:test" *command-line-args*)}
